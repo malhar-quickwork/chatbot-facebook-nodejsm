@@ -9,6 +9,9 @@ const request = require('request');
 const app = express();
 const uuid = require('uuid');
 
+var ADODB = require('node-adodb');
+var connection = ADODB.open('Provider=Microsoft.Jet.OLEDB.4.0;Data Source=Database1.mdb;');
+process.env.DEBUG = 'ADODB';
 
 // Messenger API parameters
 if (!config.FB_PAGE_TOKEN) {
@@ -75,7 +78,7 @@ app.get('/webhook/', function (req, res) {
 /*
  * All callbacks for Messenger are POST-ed. They will be sent to the same
  * webhook. Be sure to subscribe your app to your page to receive callbacks
- * for your page. 
+ * for your page.
  * https://developers.facebook.com/docs/messenger-platform/product-overview/setup#subscribe_app
  *
  */
@@ -166,7 +169,7 @@ function receivedMessage(event) {
 
 function handleMessageAttachments(messageAttachments, senderID){
 	//for now just reply
-	sendTextMessage(senderID, "Attachment received. Thank you.");	
+	sendTextMessage(senderID, "Attachment received. Thank you.");
 }
 
 function handleQuickReply(senderID, quickReply, messageId) {
@@ -183,10 +186,139 @@ function handleEcho(messageId, appId, metadata) {
 }
 
 function handleApiAiAction(sender, action, responseText, contexts, parameters) {
+		var qs="";
 	switch (action) {
+		case "trial":
+		console.log(action);
+			qs="SELECT SUM(IIF(K BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF(K BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF(K BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF(K BETWEEN 0 and 5,1,0)) AS 0to5 from demotable where month='July'"
+			connection.query(qs)
+				.on('done', function(data) {
+					var result = JSON.stringify(data, null, 2);
+					sendTextMessage(sender, result);
+					console.log(result);
+				})
+				.on('fail', function(error) {
+					console.error(error);
+					// TODO
+				});
+			break;
+		case "search":
+		if(isDefined(parameters["ItemCategory"]) && isDefined(parameters["SalesPerson"])){
+			qs="SELECT TOP 1 * FROM demotable WHERE ItemCategory='"+parameters["ItemCategory"]+"' AND Salesperson='"+parameters["SalesPerson"]+"'";
+		}
+		else if (isDefined(parameters["ItemCategory"]) && isDefined(parameters["Region"])) {
+			qs="SELECT TOP 1 * FROM demotable WHERE ItemCategory='"+parameters["ItemCategory"]+"' AND Region='"+parameters["Region"]+"'";
+		}
+		else if (isDefined(parameters["ItemCategory"])) {
+				qs="SELECT TOP 3 SUM(Quantity), ItemCategory, ModelNumber FROM demotable WHERE ItemCategory='"+parameters["ItemCategory"]+"' GROUP BY ModelNumber";
+		}
+		else {
+			qs="SELECT TOP 1 * FROM demotable";
+		}
+		connection.query(qs)
+			.on('done', function(data) {
+				var result = JSON.stringify(data, null, 2);
+				sendTextMessage(sender, result);
+				sendQuickReply(sender,"If you want break it down by region",replies);
+			})
+			.on('fail', function(error) {
+				console.error(error);
+				// TODO 逻辑处理
+			});
+			break;
+			case "pa":
+			console.log("pa");
+			if(isDefined(parameters["vaccines"])){
+				qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable";
+			}connection.query(qs)
+				.on('done', function(data) {
+					var result = JSON.stringify(data, null, 2);
+					sendTextMessage(sender, result);
+					console.log(result);
+				})
+				.on('fail', function(error) {
+					console.error(error);
+					// TODO 逻辑处理
+				});
+				break;
+				case "filter":
+				console.log("filter");
+				if(isDefined(parameters["vaccines"]) && isDefined(parameters["State"])){
+					console.log(parameters["vaccines"]);
+					console.log(parameters["State"]);
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"'";
+				}
+				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Month"])) {
+					console.log(parameters["vaccines"]);
+					console.log(parameters["Month"]);
+										qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Month='"+parameters["Month"]+"'";
+				}
+				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["State"]) && isDefined(parameters["Month"])) {
+					console.log(parameters["vaccines"]);
+					console.log(parameters["Month"]);
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"' AND Month='"+parameters["Month"]+"'";
+				}
+				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"])) {
+					console.log(parameters["vaccines"]);
+					console.log(parameters["Region"]);
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"'";
+				}
+				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["Month"])) {
+					console.log(parameters["vaccines"]);
+					console.log(parameters["Region"]);
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND Month='"+parameters["Month"]+"'";
+				}
+				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["State"])) {
+					console.log(parameters["vaccines"]);
+					console.log(parameters["Region"]);
+					console.log(parameters["State"]);
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND State='"+parameters["State"]+"'";
+				}
+				connection.query(qs)
+					.on('done', function(data) {
+						var result = JSON.stringify(data, null, 2);
+						sendTextMessage(sender, result);
+						console.log(result);
+					})
+					.on('fail', function(error) {
+						console.error(error);
+						// TODO
+					});
+				break;
+				case "ra":
+				console.log("ra");
+					if(isDefined(parameters["vaccines"])){
+						qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Region FROM demotable GROUP BY Region";
+					}
+					connection.query(qs)
+						.on('done', function(data) {
+							var result = JSON.stringify(data, null, 2);
+							sendTextMessage(sender, result);
+							console.log(result);
+						})
+						.on('fail', function(error) {
+							console.error(error);
+							// TODO
+						});
+					break;
+					case "ma":
+					console.log("ma");
+						if(isDefined(parameters["vaccines"])){
+							qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Month FROM demotable GROUP BY Month";
+						}
+						connection.query(qs)
+							.on('done', function(data) {
+								var result = JSON.stringify(data, null, 2);
+								sendTextMessage(sender, result);
+								console.log(result);
+							})
+							.on('fail', function(error) {
+								console.error(error);
+								// TODO
+							});
+						break;
 		default:
 			//unhandled action, just send back the text
-			sendTextMessage(sender, responseText);
 	}
 }
 
@@ -671,8 +803,8 @@ function greetUserText(userId) {
 }
 
 /*
- * Call the Send API. The message data goes in the body. If successful, we'll 
- * get the message id in a response 
+ * Call the Send API. The message data goes in the body. If successful, we'll
+ * get the message id in a response
  *
  */
 function callSendAPI(messageData) {
@@ -707,17 +839,17 @@ function callSendAPI(messageData) {
 /*
  * Postback Event
  *
- * This event is called when a postback is tapped on a Structured Message. 
+ * This event is called when a postback is tapped on a Structured Message.
  * https://developers.facebook.com/docs/messenger-platform/webhook-reference/postback-received
- * 
+ *
  */
 function receivedPostback(event) {
 	var senderID = event.sender.id;
 	var recipientID = event.recipient.id;
 	var timeOfPostback = event.timestamp;
 
-	// The 'payload' param is a developer-defined field which is set in a postback 
-	// button for Structured Messages. 
+	// The 'payload' param is a developer-defined field which is set in a postback
+	// button for Structured Messages.
 	var payload = event.postback.payload;
 
 	switch (payload) {
@@ -739,7 +871,7 @@ function receivedPostback(event) {
  *
  * This event is called when a previously-sent message has been read.
  * https://developers.facebook.com/docs/messenger-platform/webhook-reference/message-read
- * 
+ *
  */
 function receivedMessageRead(event) {
 	var senderID = event.sender.id;
@@ -759,7 +891,7 @@ function receivedMessageRead(event) {
  * This event is called when the Link Account or UnLink Account action has been
  * tapped.
  * https://developers.facebook.com/docs/messenger-platform/webhook-reference/account-linking
- * 
+ *
  */
 function receivedAccountLink(event) {
 	var senderID = event.sender.id;
@@ -775,7 +907,7 @@ function receivedAccountLink(event) {
 /*
  * Delivery Confirmation Event
  *
- * This event is sent to confirm the delivery of a message. Read more about 
+ * This event is sent to confirm the delivery of a message. Read more about
  * these fields at https://developers.facebook.com/docs/messenger-platform/webhook-reference/message-delivered
  *
  */
@@ -800,8 +932,8 @@ function receivedDeliveryConfirmation(event) {
 /*
  * Authorization Event
  *
- * The value for 'optin.ref' is defined in the entry point. For the "Send to 
- * Messenger" plugin, it is the 'data-ref' field. Read more at 
+ * The value for 'optin.ref' is defined in the entry point. For the "Send to
+ * Messenger" plugin, it is the 'data-ref' field. Read more at
  * https://developers.facebook.com/docs/messenger-platform/webhook-reference/authentication
  *
  */
@@ -811,9 +943,9 @@ function receivedAuthentication(event) {
 	var timeOfAuth = event.timestamp;
 
 	// The 'ref' field is set in the 'Send to Messenger' plugin, in the 'data-ref'
-	// The developer can set this to an arbitrary value to associate the 
+	// The developer can set this to an arbitrary value to associate the
 	// authentication callback with the 'Send to Messenger' click event. This is
-	// a way to do account linking when the user clicks the 'Send to Messenger' 
+	// a way to do account linking when the user clicks the 'Send to Messenger'
 	// plugin.
 	var passThroughParam = event.optin.ref;
 
@@ -827,8 +959,8 @@ function receivedAuthentication(event) {
 }
 
 /*
- * Verify that the callback came from Facebook. Using the App Secret from 
- * the App Dashboard, we can verify the signature that is sent with each 
+ * Verify that the callback came from Facebook. Using the App Secret from
+ * the App Dashboard, we can verify the signature that is sent with each
  * callback in the x-hub-signature field, located in the header.
  *
  * https://developers.facebook.com/docs/graph-api/webhooks#setup
