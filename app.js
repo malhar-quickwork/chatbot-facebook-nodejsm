@@ -8,6 +8,15 @@ const bodyParser = require('body-parser');
 const request = require('request');
 const app = express();
 const uuid = require('uuid');
+var webshot = require('webshot');
+
+// var $ = require('jquery'),
+//     XMLHttpRequest = require('xmlhttprequest').XMLHttpRequest;
+//
+// $.support.cors = true;
+// $.ajaxSettings.xhr = function() {
+//     return new XMLHttpRequest();
+// };
 
 var ADODB = require('node-adodb');
 var connection = ADODB.open('Provider=Microsoft.Jet.OLEDB.4.0;Data Source=Database1.mdb;');
@@ -50,7 +59,20 @@ app.use(bodyParser.urlencoded({
 // Process application/json
 app.use(bodyParser.json())
 
-
+var http = require('http');
+http.createServer(function(req, res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/html'
+  });
+  res.write('<!doctype html>\n<html lang="en">\n' +
+    '\n<meta charset="utf-8">\n<title></title>\n' +
+    '<style type="text/css">* {font-family:arial, sans-serif;}</style>\n' +
+    '\n\n<h1>Set a message to be sent</h1>\n' +
+    '<div id="content"><form action="/setmessage/" method="post">Message:<br><input type="text" name="message"><br>Time Interval:<br><input type="time" name="interval"><br><br><input type="submit" value="Submit"></div>' +
+    '\n\n');
+  res.end();
+}).listen(5000, '127.0.0.1');
+console.log('Server running at http://127.0.0.1:8888');
 
 
 const apiAiService = apiai(config.API_AI_CLIENT_ACCESS_TOKEN, {
@@ -124,8 +146,6 @@ app.post('/webhook/', function (req, res) {
 
 
 
-
-
 function receivedMessage(event) {
 
 	var senderID = event.sender.id;
@@ -190,12 +210,12 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 	switch (action) {
 		case "trial":
 		console.log(action);
-			qs="SELECT SUM(IIF(K BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF(K BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF(K BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF(K BETWEEN 0 and 5,1,0)) AS 0to5 from demotable where month='July'"
+			qs="SELECT SUM(IIF(Celin > 20,1,0)) AS Morethan20,SUM(IIF(Celin BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF(Celin BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF(Celin BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF(Celin BETWEEN 0 and 5,1,0)) AS 0to5,Region from demotable GROUP BY Region"
 			connection.query(qs)
 				.on('done', function(data) {
 					var result = JSON.stringify(data, null, 2);
-					sendTextMessage(sender, result);
-					console.log(result);
+					generateImage(sender,data);
+					//datatotable(result)
 				})
 				.on('fail', function(error) {
 					console.error(error);
@@ -229,10 +249,11 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 			case "pa":
 			console.log("pa");
 			if(isDefined(parameters["vaccines"])){
-				qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable";
+				qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable";
 			}connection.query(qs)
 				.on('done', function(data) {
 					var result = JSON.stringify(data, null, 2);
+					generateImage(sender,data);
 					sendTextMessage(sender, result);
 					console.log(result);
 				})
@@ -243,41 +264,56 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 				break;
 				case "filter":
 				console.log("filter");
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["State"]) && isDefined(parameters["Month"])) {
+					console.log("rsm");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND State='"+parameters["State"]+"' AND Month='"+parameters["Month"]+"'";
+				}
 				if(isDefined(parameters["vaccines"]) && isDefined(parameters["State"])){
 					console.log(parameters["vaccines"]);
 					console.log(parameters["State"]);
-					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"'";
+					console.log("S");
+					qs="SELECT State,SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"' GROUP BY State";
 				}
-				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Month"])) {
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Month"])) {
 					console.log(parameters["vaccines"]);
 					console.log(parameters["Month"]);
-										qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Month='"+parameters["Month"]+"'";
+					console.log("M");
+										qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Month='"+parameters["Month"]+"'";
 				}
-				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["State"]) && isDefined(parameters["Month"])) {
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["State"]) && isDefined(parameters["Month"])) {
 					console.log(parameters["vaccines"]);
 					console.log(parameters["Month"]);
-					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"' AND Month='"+parameters["Month"]+"'";
+					console.log("SM");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where State='"+parameters["State"]+"' AND Month='"+parameters["Month"]+"'";
 				}
-				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"])) {
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"])) {
 					console.log(parameters["vaccines"]);
 					console.log(parameters["Region"]);
-					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"'";
+					console.log("R");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"'";
 				}
-				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["Month"])) {
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["Month"])) {
 					console.log(parameters["vaccines"]);
 					console.log(parameters["Region"]);
-					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND Month='"+parameters["Month"]+"'";
+					console.log("RM");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND Month='"+parameters["Month"]+"'";
 				}
-				else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["State"])) {
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["State"])) {
 					console.log(parameters["vaccines"]);
 					console.log(parameters["Region"]);
 					console.log(parameters["State"]);
-					qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND State='"+parameters["State"]+"'";
+					console.log("RS");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND State='"+parameters["State"]+"'";
+				}
+				if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"]) && isDefined(parameters["State"]) && isDefined(parameters["Month"])) {
+					console.log("rsm");
+					qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5 FROM demotable Where Region='"+parameters["Region"]+"' AND State='"+parameters["State"]+"' AND Month='"+parameters["Month"]+"'";
 				}
 				connection.query(qs)
 					.on('done', function(data) {
 						var result = JSON.stringify(data, null, 2);
-						sendTextMessage(sender, result);
+						sendTextMessage(sender,result);
+						generateImage(sender, data);
 						console.log(result);
 					})
 					.on('fail', function(error) {
@@ -287,8 +323,13 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 				break;
 				case "ra":
 				console.log("ra");
-					if(isDefined(parameters["vaccines"])){
-						qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Region FROM demotable GROUP BY Region";
+					if(isDefined(parameters["vaccines"]) && isDefined(parameters["all"])) {
+						console.log("all");
+						qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Region FROM demotable GROUP BY Region";
+					}
+					else if (isDefined(parameters["vaccines"]) && isDefined(parameters["Region"])) {
+						console.log("region");
+						qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Region FROM demotable WHERE Region='"+parameters["Region"]+"' GROUP BY Region";
 					}
 					connection.query(qs)
 						.on('done', function(data) {
@@ -303,8 +344,8 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 					break;
 					case "ma":
 					console.log("ma");
-						if(isDefined(parameters["vaccines"])){
-							qs="SELECT SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Month FROM demotable GROUP BY Month";
+						if(isDefined(parameters["vaccines"]) && isDefined(parameters["Month"])){
+							qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,Month FROM demotable WHERE Month='"+parameters["Month"]+"' GROUP BY Month";
 						}
 						connection.query(qs)
 							.on('done', function(data) {
@@ -317,6 +358,22 @@ function handleApiAiAction(sender, action, responseText, contexts, parameters) {
 								// TODO
 							});
 						break;
+						case "group":
+						console.log("group");
+						if (isDefined(parameters["vaccines"]) && isDefined(parameters["Resource-name"])) {
+							qs="SELECT SUM(IIF("+parameters["vaccines"]+" > 20,1,0)) AS Morethan20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 16 and 20,1,0)) AS 16to20,SUM(IIF("+parameters["vaccines"]+" BETWEEN 11 and 15,1,0)) AS 11to15,SUM(IIF("+parameters["vaccines"]+" BETWEEN 6 and 10,1,0)) AS 6to10,SUM(IIF("+parameters["vaccines"]+" BETWEEN 0 and 5,1,0)) AS 0to5,"+parameters["Resource-name"]+" FROM demotable GROUP BY "+parameters["Resource-name"]+"";
+						}
+						connection.query(qs)
+							.on('done', function(data) {
+								var result = JSON.stringify(data, null, 2);
+								sendTextMessage(sender, result);
+								console.log(result);
+							})
+							.on('fail', function(error) {
+								console.error(error);
+								// TODO
+							});
+							break;
 		default:
 			//unhandled action, just send back the text
 	}
@@ -501,12 +558,11 @@ function sendImageMessage(recipientId, imageUrl) {
 			attachment: {
 				type: "image",
 				payload: {
-					url: imageUrl
-				}
+					url: imageUrl	}
 			}
 		}
 	};
-
+console.log(imageUrl);
 	callSendAPI(messageData);
 }
 
@@ -582,18 +638,19 @@ function sendVideoMessage(recipientId, videoName) {
  */
 function sendFileMessage(recipientId, fileName) {
 	var messageData = {
-		recipient: {
-			id: recipientId
-		},
-		message: {
-			attachment: {
-				type: "file",
-				payload: {
-					url: config.SERVER_URL + fileName
-				}
-			}
-		}
-	};
+recipient: {
+id: recipientId
+},
+message: {
+attachment: {
+type: "image",
+payload: {
+"is_reusable" : true
+}
+}
+},
+filedata: fileName+";type=image/png"
+};
 
 	callSendAPI(messageData);
 }
@@ -808,6 +865,8 @@ function greetUserText(userId) {
  *
  */
 function callSendAPI(messageData) {
+
+	console.log(messageData);
 	request({
 		uri: 'https://graph.facebook.com/v2.6/me/messages',
 		qs: {
@@ -815,7 +874,6 @@ function callSendAPI(messageData) {
 		},
 		method: 'POST',
 		json: messageData
-
 	}, function (error, response, body) {
 		if (!error && response.statusCode == 200) {
 			var recipientId = body.recipient_id;
@@ -986,8 +1044,99 @@ function verifyRequestSignature(req, res, buf) {
 	}
 }
 
+ function datatotable(data){
+	 var tableify = require('tableify');
+	 var html = tableify({
+    Result : data
+    });
+		console.log(html);
+		var http = require('http');var fs = require("fs");
+ 	http.createServer(function(request, response) {
+}).listen(3000);
+fs.readFile("bargraph.html", function(err, data){
+  response.writeHead(200, {'Content-Type': 'text/html'});
+	data="<!doctype HTML><html><head><title>Index</title></head><body>"+html+"</body></html"
+  response.write(data);
+  response.end();
+});
+	}
+// 	var ctx = $("#mycanvas");
+//
+// 			var barGraph = new Chart(ctx, {
+// 				type: 'bar',
+// 				data: data
+// 			});
+// }
+
+function generateImage(sender,data){
+	var htmlString = "<html><head><style>body{background-color:white}  table { border-collapse: collapse; border-spacing: 0; width: 100%; border: 1px solid #ddd; } th, td { border: none; text-align: left; padding: 8px; }tr:nth-child(even){background-color: #f2f2f2}</style><body><div width='100%'><table><tr><th>NAME</th></tr>";
+
+	if(data != undefined){
+
+	htmlString = htmlString + "<tr>";
+	for( var key in data[0]){
+	htmlString = htmlString + "<th>" + key + "</th>";
+	}
+	for(var i = 0 ; i < data.length; i++){
+	htmlString = htmlString + "<tr>";
+	for(var key in data[i]){
+	 htmlString = htmlString + "<td>" + data[i][key] + "</td>";
+	}
+	htmlString = htmlString + "</tr>";
+	}
+	}
+
+	htmlString = htmlString + '</table></div></body></html>';
+	console.log(htmlString);
+	var options = {screenSize: {
+width: 920
+, height: 480
+}
+, shotSize: {
+width: 320
+, height: 'all'
+}
+, userAgent: 'Mozilla/5.0 (iPhone; U; CPU iPhone OS 3_2 like Mac OS X; en-us)'
++ ' AppleWebKit/531.21.20 (KHTML, like Gecko) Mobile/7B298g'
+};
+	webshot(htmlString, 'hello_world.png',{siteType:'html'}, function(err) { console.log(err);
+
+	var AWS = require('aws-sdk');
+
+var s3 = new AWS.S3();
+
+// Bucket names must be unique across all S3 users
+
+var myBucket = 'qarma-pms';
+
+var myKey = 'GSK/hello_world.png'
+ var fs = require('fs');
+fs.readFile('hello_world.png', function (err,data) {
+  if (err) { throw err; }
+
+
+
+  var params = {Bucket: myBucket, Key: myKey, Body: data, ACL: 'public-read', ContentType : 'image/png'};
+
+     s3.putObject(params, function(err, data) {
+         if (err) {
+
+             console.log(err)
+
+         } else {
+
+             console.log("Successfully uploaded data to myBucket/myKey");
+						 	sendImageMessage(sender,'https://s3-us-west-2.amazonaws.com/qarma-pms/GSK/hello_world.png');
+         }
+   });
+});
+
+	});
+}
+
+
 function isDefined(obj) {
-	if (typeof obj == 'undefined') {
+	if (typeof obj == 'undefined' || typeof obj == '') {
 		return false;
 	}
 
